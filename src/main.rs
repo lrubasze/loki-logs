@@ -41,6 +41,10 @@ struct Args {
     /// Pod name
     pod: String,
 
+    /// Number of lines to fetch
+    #[arg(short, long, default_value_t = 1000u64)]
+    lines: u64,
+
     /// Start time for logs in Grafana format (default: now-24h)
     #[arg(short, long, default_value = "now-24h")]
     from: String,
@@ -74,6 +78,7 @@ impl Loki {
         pod: &str,
         from: &str,
         to: &str,
+        lines: u64,
         raw: bool,
     ) -> Result<(), anyhow::Error> {
         let body = json!({
@@ -88,7 +93,7 @@ impl Loki {
                     },
                     "direction":"forward",
                     // NOTE! ATM there is a limit max_entries_limit=5000, which we cannot exceed
-                    "maxLines": 50,
+                    "maxLines": lines,
                     "format": "log",
                     "step": "",
                     "datasourceId": 24,
@@ -185,6 +190,13 @@ fn main() -> Result<(), anyhow::Error> {
     let args = Args::parse();
     let loki = Loki::new()?;
 
-    loki.get_logs(&args.namespace, &args.pod, &args.from, &args.to, args.raw)?;
+    loki.get_logs(
+        &args.namespace,
+        &args.pod,
+        &args.from,
+        &args.to,
+        args.lines,
+        args.raw,
+    )?;
     Ok(())
 }
