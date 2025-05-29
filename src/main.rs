@@ -1,4 +1,5 @@
 use clap::Parser;
+use itertools::Itertools;
 use reqwest::blocking::Client;
 use reqwest::Identity;
 use serde_json::{json, Value};
@@ -87,7 +88,7 @@ impl Loki {
                     },
                     "direction":"forward",
                     // NOTE! ATM there is a limit max_entries_limit=5000, which we cannot exceed
-                    "maxLines": 200,
+                    "maxLines": 50,
                     "format": "log",
                     "step": "",
                     "datasourceId": 24,
@@ -120,11 +121,29 @@ impl Loki {
             .and_then(|a| a.get("frames"))
             .and_then(|frames| frames.get(0))
             .and_then(|frame| frame.get("data"))
-            .and_then(|data| data.get("values"))
-            .and_then(|values| values.get(2))
-            .and_then(|logs| logs.as_array())
+            .and_then(|data| {
+                let x = data.get("values");
+                x
+            })
+            .and_then(|values| {
+                values.get(1).and_then(|v1| v1.as_array()).and_then(|v1| {
+                    values
+                        .get(2)
+                        .and_then(|v2| v2.as_array())
+                        .map(|v2| (v1, v2))
+                })
+            })
+            // Lines must be sorted according to the timestamp
+            .and_then(|(timestamps, lines)| {
+                let lines: Vec<&Value> = timestamps
+                    .iter()
+                    .zip(lines.iter())
+                    .sorted_by_key(|(tstamp, _)| tstamp.as_u64().unwrap())
+                    .map(|(_, lines)| lines)
+                    .collect();
+                Some(lines)
+            })
         {
-            // NOTE! noticed that lines might appear not in chronological order
             for log in log_lines {
                 if let Some(log_str) = log.as_str() {
                     println!("{}", log_str);
